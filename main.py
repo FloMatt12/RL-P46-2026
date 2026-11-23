@@ -50,12 +50,17 @@ if __name__ == "__main__":
 	parser.add_argument("--batch_size", default=256, type=int)      # Batch size for both actor and critic
 	parser.add_argument("--discount", default=0.99, type=float)     # Discount factor
 	parser.add_argument("--tau", default=0.005, type=float)         # Target network update rate
-	parser.add_argument("--policy_noise", default=0.2)              # Noise added to target policy during critic update
-	parser.add_argument("--noise_clip", default=0.5)                # Range to clip target policy noise
+	parser.add_argument("--policy_noise", default=0.2, type=float)  # Noise added to target policy during critic update
+	parser.add_argument("--noise_clip", default=0.5, type=float)    # Range to clip target policy noise
 	parser.add_argument("--policy_freq", default=2, type=int)       # Frequency of delayed policy updates
 	parser.add_argument("--save_model", action="store_true")        # Save model and optimizer parameters
 	parser.add_argument("--load_model", default="")                 # Model load file name, "" doesn't load, "default" uses file_name
 	parser.add_argument("--torch_threads", default=1, type=int)     # new
+	# new (Part 3): network size and learning rates for TD3/OurDDPG (paper: --hidden_sizes 400 300 --actor_lr 1e-3 --critic_lr 1e-3)
+	parser.add_argument("--hidden_sizes", default=[256, 256], type=int, nargs=2) # Sizes of the two hidden layers (actor and critic)
+	parser.add_argument("--actor_lr", default=3e-4, type=float)     # Actor learning rate
+	parser.add_argument("--critic_lr", default=3e-4, type=float)    # Critic learning rate
+	parser.add_argument("--results_dir", default="./results")       # new (Part 3): where the evaluation .npy is saved
 	args = parser.parse_args()
 	# new
 	torch.set_num_threads(args.torch_threads)
@@ -68,7 +73,7 @@ if __name__ == "__main__":
 
 	#if not os.path.exists("./results"):
 	#	os.makedirs("./results")
-	os.makedirs("./results", exist_ok=True) # new
+	os.makedirs(args.results_dir, exist_ok=True) # new
 	#if args.save_model and not os.path.exists("./models"):
 	#	os.makedirs("./models")
 	if args.save_model: # new
@@ -84,6 +89,9 @@ if __name__ == "__main__":
 	state_dim = env.observation_space.shape[0]
 	action_dim = env.action_space.shape[0] 
 	max_action = float(env.action_space.high[0])
+	# new (Part 3): the policies scale actions/noise by a single max_action, so bounds must be symmetric and equal per dimension
+	assert np.allclose(env.action_space.high, max_action) and np.allclose(env.action_space.low, -max_action), \
+		f"{args.env} has non-symmetric or non-uniform action bounds: low={env.action_space.low}, high={env.action_space.high}"
 
 	kwargs = {
 		"state_dim": state_dim,
@@ -92,6 +100,12 @@ if __name__ == "__main__":
 		"discount": args.discount,
 		"tau": args.tau,
 	}
+	# new (Part 3): only TD3 and OurDDPG accept these; DDPG.py keeps its fixed original architecture
+	net_kwargs = {
+		"hidden_sizes": tuple(args.hidden_sizes),
+		"actor_lr": args.actor_lr,
+		"critic_lr": args.critic_lr,
+	}
 
 	# Initialize policy
 	if args.policy == "TD3":
@@ -99,9 +113,9 @@ if __name__ == "__main__":
 		kwargs["policy_noise"] = args.policy_noise * max_action
 		kwargs["noise_clip"] = args.noise_clip * max_action
 		kwargs["policy_freq"] = args.policy_freq
-		policy = TD3.TD3(**kwargs)
+		policy = TD3.TD3(**kwargs, **net_kwargs)
 	elif args.policy == "OurDDPG":
-		policy = OurDDPG.DDPG(**kwargs)
+		policy = OurDDPG.DDPG(**kwargs, **net_kwargs)
 	elif args.policy == "DDPG":
 		policy = DDPG.DDPG(**kwargs)
 
@@ -160,6 +174,6 @@ if __name__ == "__main__":
 		# Evaluate episode
 		if (t + 1) % args.eval_freq == 0:
 			evaluations.append(eval_policy(policy, args.env, args.seed))
-			np.save(f"./results/{file_name}", evaluations)
+			np.save(os.path.join(args.results_dir, file_name), evaluations)
 			if args.save_model: policy.save(f"./models/{file_name}")
 	env.close()

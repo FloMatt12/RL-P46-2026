@@ -66,3 +66,24 @@ Learning curves found in the paper are found under /learning_curves. Each learni
 
 Numerical results can be found in the paper, or from the learning curves. Video of the learned agent can be found [here](https://youtu.be/x33Vw-6vzso). 
 
+
+
+### Part 3: other environments
+Tests whether TD3's advantage over DDPG ("OurDDPG", the paper's re-tuned DDPG) holds on environments not used in the paper: MuJoCo (Swimmer, Pusher, Humanoid, HumanoidStandup), Box2D (BipedalWalker, LunarLanderContinuous) and classic control (Pendulum, MountainCarContinuous).
+
+The Box2D environments need extra dependencies:
+```
+pip install swig
+pip install "gymnasium[box2d]"
+```
+Or install the exact versions used: `pip install -r requirements.txt`.
+
+Run the sweep and plot it:
+```
+python run_envs.py --dry_run          # list the jobs
+python run_envs.py --workers 8        # TD3 + OurDDPG, 5 seeds, per-env budgets defined in run_envs.py
+python plot_envs.py                   # results/part3_envs/learning_curves.png + summary.md
+```
+Finished runs are skipped when the sweep is restarted. The results, logs and `manifest.json` (commands, git commit, library versions) are written to `results/<tag>/`. Arguments after `--` are passed through to `main.py`, for example `python run_envs.py --tag paper_hparams -- --hidden_sizes 400 300 --actor_lr 1e-3 --critic_lr 1e-3`.
+
+New `main.py` options (the defaults keep the previous behaviour): `--hidden_sizes H1 H2`, `--actor_lr`, `--critic_lr` (TD3 and OurDDPG only) and `--results_dir`. `--policy_noise` and `--noise_clip` are now parsed as floats.
