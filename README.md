@@ -80,10 +80,12 @@ Or install the exact versions used: `pip install -r requirements.txt`.
 
 Run the sweep and plot it:
 ```
-python run_envs.py --dry_run          # list the jobs
-python run_envs.py --workers 8        # TD3 + OurDDPG, 5 seeds, per-env budgets defined in run_envs.py
-python plot_envs.py                   # results/part3_envs/learning_curves.png + summary.md
+python run_envs.py --dry_run                      # list the jobs
+python run_envs.py --workers 16 --tag paper_1M    # TD3 + OurDDPG, 10 seeds, 1M steps (Pendulum 100k), paper hyperparameters
+python plot_envs.py --tag paper_1M                # results/paper_1M/learning_curves.png + summary.md
 ```
-Finished runs are skipped when the sweep is restarted. The results, logs and `manifest.json` (commands, git commit, library versions) are written to `results/<tag>/`. Arguments after `--` are passed through to `main.py`, for example `python run_envs.py --tag paper_hparams -- --hidden_sizes 400 300 --actor_lr 1e-3 --critic_lr 1e-3`.
+By default the sweep follows the paper's protocol: 400-300 networks, Adam lr 1e-3, batch 100 and 1k random start steps (`--hparams paper`). `--hparams repo` uses the repo defaults instead (256-256, lr 3e-4, batch 256). `--seeds`, `--first_seed`, `--max_timesteps` and `--start_timesteps` override the defaults, so seeds can be added later, e.g. `--first_seed 5 --seeds 5`.
+
+Finished runs are skipped when the sweep is restarted. The results, logs and `manifest.json` (commands, git commit, library versions) are written to `results/<tag>/`. Arguments after `--` are passed through to `main.py`, for example `python run_envs.py --envs MountainCarContinuous-v0 --tag mcar_noise05 -- --expl_noise 0.5`.
 
 New `main.py` options (the defaults keep the previous behaviour): `--hidden_sizes H1 H2`, `--actor_lr`, `--critic_lr` (TD3 and OurDDPG only) and `--results_dir`. `--policy_noise` and `--noise_clip` are now parsed as floats.

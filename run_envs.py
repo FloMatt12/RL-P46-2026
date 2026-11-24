@@ -3,8 +3,10 @@
 #
 # Examples:
 #   python run_envs.py --dry_run                                 # print the job list and exit
-#   python run_envs.py --workers 12                              # full default sweep
+#   python run_envs.py --workers 16 --tag paper_1M               # full sweep: paper hyperparameters, 1M steps, 10 seeds
 #   python run_envs.py --envs Pendulum-v1 --seeds 2 --max_timesteps 20000 --tag smoke
+#   python run_envs.py --envs MountainCarContinuous-v0 --tag mcar_noise05 -- --expl_noise 0.5   # extra args go to main.py
+# The first (CPU) sweep used: --hparams repo --max_timesteps 300000 --start_timesteps 25000 --seeds 3 (Pendulum: 100k, 1k).
 #
 # Output (results/<tag>/):
 #   {policy}_{env}_{seed}.npy   evaluations, same format as main.py (index 0 = untrained policy)
@@ -26,21 +28,30 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent
 
 # Environments not in the paper. Value = (max_timesteps, start_timesteps).
-# start_timesteps follows the repo convention: 25e3 by default, 1e3 for short/simple tasks.
+# Paper protocol: 1M steps, 1k random start steps (the paper used 10k only for HalfCheetah and Ant).
+# Pendulum converges in ~10k steps, so it is kept as a short sanity check.
 ENVIRONMENTS = {
 	# MuJoCo, not used in the paper
-	"Swimmer-v5":               (300_000, 25_000),
-	"Pusher-v5":                (300_000, 25_000),
-	"Humanoid-v5":              (300_000, 25_000),
-	"HumanoidStandup-v5":       (300_000, 25_000),
+	"Swimmer-v5":               (1_000_000, 1_000),
+	"Pusher-v5":                (1_000_000, 1_000),
+	"Humanoid-v5":              (1_000_000, 1_000),
+	"HumanoidStandup-v5":       (1_000_000, 1_000),
 	# Box2D (different physics engine)
-	"BipedalWalker-v3":         (300_000, 25_000),
-	"LunarLanderContinuous-v3": (300_000, 25_000),
+	"BipedalWalker-v3":         (1_000_000, 1_000),
+	"LunarLanderContinuous-v3": (1_000_000, 1_000),
 	# Classic control
 	"Pendulum-v1":              (100_000, 1_000),
-	"MountainCarContinuous-v0": (300_000, 25_000),
+	"MountainCarContinuous-v0": (1_000_000, 1_000),
 }
 POLICIES = ["TD3", "OurDDPG"]
+
+# Network/optimiser settings passed to main.py.
+#   paper: Fujimoto et al. 2018, Sec. 6.1 (400-300 networks, Adam lr 1e-3, batch 100), same for TD3 and OurDDPG
+#   repo:  current sfujim/TD3 defaults (256-256, lr 3e-4, batch 256), i.e. main.py's own defaults
+HPARAMS = {
+	"paper": ["--hidden_sizes", "400", "300", "--actor_lr", "1e-3", "--critic_lr", "1e-3", "--batch_size", "100"],
+	"repo": [],
+}
 
 
 def expected_evals(max_timesteps, eval_freq):
@@ -67,7 +78,7 @@ def build_command(policy, env, seed, max_timesteps, start_timesteps, args, out_d
 		"--start_timesteps", str(start_timesteps),
 		"--eval_freq", str(args.eval_freq),
 		"--results_dir", str(out_dir),
-	] + args.extra
+	] + HPARAMS[args.hparams] + args.extra
 
 
 def run_job(name, command, log_path):
@@ -104,9 +115,11 @@ def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--policies", nargs="+", default=POLICIES)
 	parser.add_argument("--envs", nargs="+", default=list(ENVIRONMENTS))
-	parser.add_argument("--seeds", type=int, default=5)             # runs seeds 0..N-1
+	parser.add_argument("--seeds", type=int, default=10)            # runs seeds first_seed..first_seed+N-1 (paper: 10)
 	parser.add_argument("--first_seed", type=int, default=0)
+	parser.add_argument("--hparams", choices=list(HPARAMS), default="paper")
 	parser.add_argument("--max_timesteps", type=int, default=None)  # overrides the per-env budget
+	parser.add_argument("--start_timesteps", type=int, default=None)  # overrides the per-env random start steps
 	parser.add_argument("--eval_freq", type=int, default=5_000)
 	parser.add_argument("--workers", type=int, default=4)
 	parser.add_argument("--tag", default="part3_envs")              # results go to results/<tag>/
@@ -129,6 +142,8 @@ def main():
 			max_t, start_t = ENVIRONMENTS[env]
 			if args.max_timesteps is not None:
 				max_t = args.max_timesteps
+			if args.start_timesteps is not None:
+				start_t = args.start_timesteps
 			for policy in args.policies:
 				name = f"{policy}_{env}_{seed}"
 				if result_is_complete(out_dir / f"{name}.npy", expected_evals(max_t, args.eval_freq)):

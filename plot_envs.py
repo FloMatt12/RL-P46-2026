@@ -30,9 +30,8 @@ def load_runs(results_dir):
 
 
 def stack_complete(curves_by_seed):
-	# Only keep runs of the most common length, so unfinished runs don't distort the mean.
-	lengths = [len(c) for c in curves_by_seed.values()]
-	n = max(set(lengths), key=lengths.count)
+	# Only keep the longest (finished) runs, so unfinished runs don't distort the mean.
+	n = max(len(c) for c in curves_by_seed.values())
 	seeds = sorted(s for s, c in curves_by_seed.items() if len(c) == n)
 	return np.stack([curves_by_seed[s] for s in seeds]), seeds
 
