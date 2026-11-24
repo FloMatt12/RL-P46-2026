@@ -29,6 +29,34 @@ python main.py --env HalfCheetah-v5
 
 Hyper-parameters can be modified with different arguments to main.py. We include an implementation of DDPG (DDPG.py), which is not used in the paper, for easy comparison of hyper-parameters with TD3. This is not the implementation of "Our DDPG" as used in the paper (see OurDDPG.py). 
 
+### Figure 2 — Overestimation bias
+
+Reproduces the overestimation-bias experiment from Section 4 of the paper
+(Figure 2): the critic's value estimate `Q(s, π(s))` is compared against the
+true discounted return of the current policy, measured throughout training on
+a MuJoCo task. Two extra actor-critic baselines are added for this study:
+
+- `DDQN_AC.py` — Double-DQN actor-critic: the online actor selects the next action, the target critic evaluates it (single critic, no clipped min).
+- `DQ_AC.py` — Double Q-learning actor-critic: two independent actor-critic pairs with cross-evaluated targets.
+
+Both share TD3's architecture, target smoothing and delayed updates, so the
+only difference from CDQ/TD3 is the target-value formula — isolating the effect
+of the double-Q estimator, as in the paper.
+
+Reproduce the figure (DDPG, DDQN-AC, DQ-AC, CDQ/TD3 on Hopper-v5, 200k steps):
+```
+./run_figure2.sh
+```
+Or a single method / environment:
+```
+python overestimation.py --policy DQ_AC --env Hopper-v5 --max_timesteps 200000
+python plot_figure2.py --env Hopper-v5
+```
+Per-method data is written to `results/figure2/*.npz`; the combined figure is
+saved to `figure2_<env>.png`. Expected result: DDPG and DDQN-AC overestimate
+strongly (estimate well above the true return), DQ-AC much less, and CDQ/TD3
+stays close to (or slightly below) the true value.
+
 Algorithms which TD3 compares against (PPO, TRPO, ACKTR, DDPG) can be found at [OpenAI baselines repository](https://github.com/openai/baselines). 
 
 ### Results
