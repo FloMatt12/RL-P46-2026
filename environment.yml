@@ -1,0 +1,20 @@
+# Environment for RenkuLab ("Create from code" builds it with miniconda) and for local conda use:
+#   conda env create -f environment.yml
+# Renku can't choose the Python version for requirements.txt (it uses an older Python), so the
+# versions live here. Local tests used Python 3.13.2 on Windows 11 (CPU).
+name: rl-p46
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+    # CPU-only PyTorch: the default Linux wheel pulls in ~3 GB of CUDA libraries we don't use.
+    - --extra-index-url https://download.pytorch.org/whl/cpu
+    - torch==2.15.0+cpu ; sys_platform == "linux"
+    - torch==2.15.0 ; sys_platform != "linux"
+    - numpy==2.5.5
+    - gymnasium==1.4.0
+    - mujoco==4.0.1
+    - Box2D==2.3.10
+    - matplotlib==3.11.2
