@@ -66,3 +66,26 @@ Learning curves found in the paper are found under /learning_curves. Each learni
 
 Numerical results can be found in the paper, or from the learning curves. Video of the learned agent can be found [here](https://youtu.be/x33Vw-6vzso). 
 
+
+
+### Part 3: other environments
+Tests whether TD3's advantage over DDPG ("OurDDPG", the paper's re-tuned DDPG) holds on environments not used in the paper: MuJoCo (Swimmer, Pusher, Humanoid, HumanoidStandup), Box2D (BipedalWalker, LunarLanderContinuous) and classic control (Pendulum, MountainCarContinuous).
+
+The Box2D environments need extra dependencies:
+```
+pip install swig
+pip install "gymnasium[box2d]"
+```
+Or install the exact versions used: `pip install -r requirements.txt`.
+
+Run the sweep and plot it:
+```
+python run_envs.py --dry_run                      # list the jobs
+python run_envs.py --workers 16 --tag paper_1M    # TD3 + OurDDPG, 10 seeds, 1M steps (Pendulum 100k), paper hyperparameters
+python plot_envs.py --tag paper_1M                # results/paper_1M/learning_curves.png + summary.md
+```
+By default the sweep follows the paper's protocol: 400-300 networks, Adam lr 1e-3, batch 100 and 1k random start steps (`--hparams paper`). `--hparams repo` uses the repo defaults instead (256-256, lr 3e-4, batch 256). `--seeds`, `--first_seed`, `--max_timesteps` and `--start_timesteps` override the defaults, so seeds can be added later, e.g. `--first_seed 5 --seeds 5`.
+
+Finished runs are skipped when the sweep is restarted. The results, logs and `manifest.json` (commands, git commit, library versions) are written to `results/<tag>/`. Arguments after `--` are passed through to `main.py`, for example `python run_envs.py --envs MountainCarContinuous-v0 --tag mcar_noise05 -- --expl_noise 0.5`.
+
+New `main.py` options (the defaults keep the previous behaviour): `--hidden_sizes H1 H2`, `--actor_lr`, `--critic_lr` (TD3 and OurDDPG only) and `--results_dir`. `--policy_noise` and `--noise_clip` are now parsed as floats.

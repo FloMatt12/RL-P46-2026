@@ -12,12 +12,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
-	def __init__(self, state_dim, action_dim, max_action):
+	def __init__(self, state_dim, action_dim, max_action, hidden_sizes=(256, 256)):
 		super(Actor, self).__init__()
+		h1, h2 = hidden_sizes
 
-		self.l1 = nn.Linear(state_dim, 256)
-		self.l2 = nn.Linear(256, 256)
-		self.l3 = nn.Linear(256, action_dim)
+		self.l1 = nn.Linear(state_dim, h1)
+		self.l2 = nn.Linear(h1, h2)
+		self.l3 = nn.Linear(h2, action_dim)
 		
 		self.max_action = max_action
 		
@@ -29,18 +30,19 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-	def __init__(self, state_dim, action_dim):
+	def __init__(self, state_dim, action_dim, hidden_sizes=(256, 256)):
 		super(Critic, self).__init__()
+		h1, h2 = hidden_sizes
 
 		# Q1 architecture
-		self.l1 = nn.Linear(state_dim + action_dim, 256)
-		self.l2 = nn.Linear(256, 256)
-		self.l3 = nn.Linear(256, 1)
+		self.l1 = nn.Linear(state_dim + action_dim, h1)
+		self.l2 = nn.Linear(h1, h2)
+		self.l3 = nn.Linear(h2, 1)
 
 		# Q2 architecture
-		self.l4 = nn.Linear(state_dim + action_dim, 256)
-		self.l5 = nn.Linear(256, 256)
-		self.l6 = nn.Linear(256, 1)
+		self.l4 = nn.Linear(state_dim + action_dim, h1)
+		self.l5 = nn.Linear(h1, h2)
+		self.l6 = nn.Linear(h2, 1)
 
 
 	def forward(self, state, action):
@@ -75,16 +77,19 @@ class TD3(object):
 		tau=0.005,
 		policy_noise=0.2,
 		noise_clip=0.5,
-		policy_freq=2
+		policy_freq=2,
+		hidden_sizes=(256, 256),
+		actor_lr=3e-4,
+		critic_lr=3e-4
 	):
 
-		self.actor = Actor(state_dim, action_dim, max_action).to(device)
+		self.actor = Actor(state_dim, action_dim, max_action, hidden_sizes).to(device)
 		self.actor_target = copy.deepcopy(self.actor)
-		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
 
-		self.critic = Critic(state_dim, action_dim).to(device)
+		self.critic = Critic(state_dim, action_dim, hidden_sizes).to(device)
 		self.critic_target = copy.deepcopy(self.critic)
-		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
 
 		self.max_action = max_action
 		self.discount = discount

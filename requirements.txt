@@ -1,0 +1,8 @@
+# Tested with Python 3.13.2 on Windows 11 (CPU). swig is only needed to build Box2D.
+Box2D==2.3.10
+gymnasium==1.4.0
+matplotlib==3.11.2
+mujoco==4.0.1
+numpy==2.5.5
+swig==4.5.1
+torch==2.15.0
