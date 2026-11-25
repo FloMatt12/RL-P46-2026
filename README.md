@@ -84,6 +84,10 @@ python run_envs.py --dry_run                      # list the jobs
 python run_envs.py --workers 16 --tag paper_1M    # TD3 + OurDDPG, 10 seeds, 1M steps (Pendulum 100k), paper hyperparameters
 python plot_envs.py --tag paper_1M                # results/paper_1M/learning_curves.png + summary.md
 ```
+
+On RenkuLab, run it as a job with `renku_job.sh`. A job's files are deleted when it ends, so the script pushes the results every 30 minutes to a git repo (here `rl-p46-results`, added to the Renku project as a second code repository; a branch name instead pushes to that branch of this repo) and resumes from there if restarted:
+`["bash", "RL-P46-2026/renku_job.sh", "rl-p46-results", "--workers", "14", "--tag", "paper_1M"]`
+
 By default the sweep follows the paper's protocol: 400-300 networks, Adam lr 1e-3, batch 100 and 1k random start steps (`--hparams paper`). `--hparams repo` uses the repo defaults instead (256-256, lr 3e-4, batch 256). `--seeds`, `--first_seed`, `--max_timesteps` and `--start_timesteps` override the defaults, so seeds can be added later, e.g. `--first_seed 5 --seeds 5`.
 
 Finished runs are skipped when the sweep is restarted. The results, logs and `manifest.json` (commands, git commit, library versions) are written to `results/<tag>/`. Arguments after `--` are passed through to `main.py`, for example `python run_envs.py --envs MountainCarContinuous-v0 --tag mcar_noise05 -- --expl_noise 0.5`.
