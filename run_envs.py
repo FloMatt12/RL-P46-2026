@@ -81,7 +81,32 @@ def build_command(policy, env, seed, max_timesteps, start_timesteps, args, out_d
 	] + HPARAMS[args.hparams] + args.extra
 
 
-def run_job(name, command, log_path):
+class NotStarted(Exception):
+	pass
+
+
+def check_envs(envs):
+	# Fail in seconds, not after hours of other runs, if an env can't be built (e.g. a missing package).
+	import gymnasium as gym
+	broken = {}
+	for env in envs:
+		try:
+			gym.make(env).close()
+		except Exception as exc:
+			broken[env] = f"{type(exc).__name__}: {exc}"
+	return broken
+
+
+def log_tail(log_path, n=15):
+	try:
+		return "".join(log_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)[-n:])
+	except OSError:
+		return ""
+
+
+def run_job(name, command, log_path, start_deadline=None):
+	if start_deadline is not None and time.time() > start_deadline:
+		raise NotStarted(name)
 	child_env = os.environ.copy()
 	for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
 		child_env[var] = "1"
@@ -123,6 +148,7 @@ def main():
 	parser.add_argument("--eval_freq", type=int, default=5_000)
 	parser.add_argument("--workers", type=int, default=4)
 	parser.add_argument("--tag", default="part3_envs")              # results go to results/<tag>/
+	parser.add_argument("--no_start_after_hours", type=float, default=None)  # don't start new runs after this (job time limit)
 	parser.add_argument("--dry_run", action="store_true")
 	parser.add_argument("extra", nargs=argparse.REMAINDER)          # after "--": passed through to main.py
 	args = parser.parse_args()
@@ -158,6 +184,11 @@ def main():
 			print(" ", name, " ".join(cmd[3:]))
 		return
 
+	broken = check_envs(sorted({cmd[cmd.index("--env") + 1] for _, cmd in jobs}))
+	if broken:
+		raise SystemExit("Cannot create environment(s), nothing started:\n"
+			+ "\n".join(f"  {env}: {err}" for env, err in broken.items()))
+
 	log_dir.mkdir(parents=True, exist_ok=True)
 	manifest_path = out_dir / "manifest.json"
 	manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {"launches": [], "runs": {}}
@@ -174,21 +205,32 @@ def main():
 
 	save_manifest()
 
-	failures = []
+	start_deadline = None
+	if args.no_start_after_hours is not None:
+		start_deadline = time.time() + args.no_start_after_hours * 3600
+
+	failures, not_started = [], []
 	with ThreadPoolExecutor(max_workers=args.workers) as executor:
-		futures = {executor.submit(run_job, name, cmd, log_dir / f"{name}.log"): (name, cmd) for name, cmd in jobs}
+		futures = {executor.submit(run_job, name, cmd, log_dir / f"{name}.log", start_deadline): (name, cmd)
+			for name, cmd in jobs}
 		for done, future in enumerate(as_completed(futures), start=1):
 			name, cmd = futures[future]
 			try:
 				seconds = future.result()
+			except NotStarted:
+				not_started.append(name)
+				continue
 			except Exception as exc:
 				failures.append(name)
-				print(f"FAILED {name}: {exc} (see {log_dir / (name + '.log')})", file=sys.stderr)
+				log_path = log_dir / f"{name}.log"
+				print(f"FAILED {name}: {exc}\n--- last lines of {log_path} ---\n{log_tail(log_path)}", file=sys.stderr)
 				continue
 			manifest["runs"][name] = {"command": cmd[2:], "seconds": round(seconds)}
 			save_manifest()
 			print(f"[{done}/{len(jobs)}] {name} done in {seconds / 60:.1f} min")
 
+	if not_started:
+		print(f"Not started ({args.no_start_after_hours} h limit reached), run again to do them: {not_started}")
 	if failures:
 		raise SystemExit(f"{len(failures)} run(s) failed: {failures}")
 

@@ -40,15 +40,27 @@ else
 	fi
 fi
 
+# Several jobs may push to the same branch, so each job only pushes the files it wrote itself (newer than
+# $MARK), and its manifest and logs get a per-job name; otherwise the jobs' commits would conflict.
+JOB_ID="${HOSTNAME:-job}-$(date -u +%Y%m%dT%H%M)"
+MARK="$(mktemp)"   # timestamp of the job start (after the restore above)
+
 push_results() {  # $1 = commit message
 	mkdir -p "$WT/results" "$REPO/results"
-	(cd "$REPO/results" && find . \( -name '*.npy' -o -name 'manifest.json' -o -name '*.log.tar.gz' \) -print0 \
+	for logs in "$REPO"/results/*/logs; do
+		[ -d "$logs" ] && tar -czf "$(dirname "$logs")/logs.$JOB_ID.log.tar.gz" -C "$(dirname "$logs")" logs
+	done
+	(cd "$REPO/results" && find . -newer "$MARK" \( -name '*.npy' -o -name '*.log.tar.gz' \) -print0 \
 		| xargs -0 -r cp --parents -t "$WT/results/")
+	(cd "$REPO/results" && find . -newer "$MARK" -name manifest.json) | while read -r m; do
+		mkdir -p "$WT/results/$(dirname "$m")"
+		cp "$REPO/results/$m" "$WT/results/$(dirname "$m")/manifest.$JOB_ID.json"
+	done
 	cd "$WT"
 	git add -A results
 	git commit -q -m "$1" >/dev/null || true   # nothing new -> nothing to commit
 	for attempt in 1 2 3; do
-		git pull -q --rebase origin "$BRANCH" 2>/dev/null   # another job may have pushed to the same branch
+		git pull -q --rebase origin "$BRANCH" 2>/dev/null || git rebase --abort 2>/dev/null
 		git push -q origin "HEAD:refs/heads/$BRANCH" && { cd "$REPO"; return 0; }
 		sleep 30
 	done
@@ -68,9 +80,5 @@ while kill -0 "$PID" 2>/dev/null; do
 	kill -0 "$PID" 2>/dev/null && push_results "Results update ($(date -u +%Y-%m-%dT%H:%MZ))"
 done
 wait "$PID"; STATUS=$?
-
-for logs in "$REPO"/results/*/logs; do
-	[ -d "$logs" ] && tar -czf "$logs.log.tar.gz" -C "$(dirname "$logs")" logs
-done
 push_results "Job finished (run_envs.py exit code $STATUS)"
 exit "$STATUS"

@@ -16,5 +16,7 @@ dependencies:
     - numpy==2.5.5
     - gymnasium==1.4.0
     - mujoco==4.0.1
+    - imageio==2.38.2      # imported by gymnasium.envs.mujoco (part of gymnasium[mujoco])
     - Box2D==2.3.10
+    - pygame-ce==2.5.8     # imported by gymnasium.envs.box2d (provides the `pygame` module)
     - matplotlib==3.11.2
