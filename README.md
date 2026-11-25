@@ -76,7 +76,7 @@ The Box2D environments need extra dependencies:
 pip install swig
 pip install "gymnasium[box2d]"
 ```
-Or install the exact versions used: `pip install -r requirements.txt`.
+Or install the exact versions used with `conda env create -f environment.yml` (this file is also what RenkuLab builds from).
 
 Run the sweep and plot it:
 ```
